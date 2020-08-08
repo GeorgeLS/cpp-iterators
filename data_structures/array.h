@@ -1,3 +1,6 @@
+#ifndef ARRAY_H
+#define ARRAY_H
+
 #include <cstdio>
 #include "../iterator.h"
 
@@ -5,6 +8,17 @@ template<typename T> struct Array {
   Array() : data{nullptr}, num_elements{0U} {}
 
   explicit Array(size_t size) : data{new T[size]}, num_elements{size} {}
+
+  template<typename IteratorType>
+  static Array<T> from_iterator(IteratorType iter) {
+    size_t count = iter.clone().count();
+    auto arr = Array<T>(count);
+    foreach(it, iter.enumerate()) {
+      auto[index, value] = *it;
+      arr[index] = value;
+    }
+    return arr;
+  }
 
   Array(const Array<T> &rhs)
       : data{new T[rhs.num_elements]}, num_elements{rhs.num_elements} {
@@ -52,40 +66,4 @@ private:
   size_t num_elements;
 };
 
-void compute_product() {
-  Array<size_t> my_arr(10);
-
-  for (size_t i = 0U; i != my_arr.len(); ++i) {
-    my_arr[i] = i;
-  }
-
-  size_t p = my_arr.iter()
-      .skip(1)
-      .take(3)
-      .fold(1, [](size_t acc, const size_t &v) {
-        return acc * v;
-      });
-
-  printf("Product is: %zu\n", p);
-}
-
-void map_to_string() {
-  Array<double> doubles(100);
-
-  for (size_t i = 0U; i != doubles.len(); ++i) {
-    doubles[i] = 100.0 / (double) (i + 1);
-  }
-
-  foreach(it, doubles.iter()
-      .map([](const double &v) {
-        return "The double value is " + std::to_string(v);
-      })) {
-    printf("%s\n", (*it).c_str());
-  }
-}
-
-int main() {
-  compute_product();
-  map_to_string();
-  return 0;
-}
+#endif
