@@ -3,4 +3,5 @@ project(iterator)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(iterator iterator.h data_structures/array.h)
+add_executable(array_test iterator.h data_structures/array.h unit_test.h tests/array_test.cpp)
+add_executable(iterator_test iterator.h data_structures/array.h unit_test.h tests/iterator_test.cpp)

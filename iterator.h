@@ -47,16 +47,29 @@ namespace internal {
 template<typename R, typename F, typename... Args>
 inline constexpr bool returns_type_v = std::is_same_v<std::result_of_t<F(Args...)>, R>;
 
-
 /**
  * Summary:
- *      Extracts the ItemType that an iterator of type
- *      `IteratorType` yields.
+ *      Determines whether a callable of type `F` that takes argument(s)
+ *      of type(s) `Args...` returns bool
  *
- * @tparam IteratorType: The type of the iterator
+ * @tparam F:    The type of the callable
+ * @tparam Args: The type(s) of the arguments that the callable accepts
  */
-template<typename IteratorType>
-using item_type = typename IteratorType::ItemType;
+template<typename F, typename ... Args>
+inline constexpr bool returns_bool_v = returns_type_v<bool, F, Args...>;
+
+template<typename T>
+struct is_ref_wrapper {
+  static constexpr bool value = false;
+};
+
+template<typename T>
+struct is_ref_wrapper<std::reference_wrapper<T>> {
+  static constexpr bool value = true;
+};
+
+template<typename T>
+inline constexpr bool is_ref_wrapper_v = is_ref_wrapper<T>::value;
 
 /**
  * Summary:
@@ -88,16 +101,31 @@ struct strip_ref_wrapper<std::reference_wrapper<T>> {
 template<typename T>
 using strip_ref_wrapper_t = typename strip_ref_wrapper<T>::type;
 
+template<typename T>
+struct unwrap_ref_wrapper {
+  using type = T;
+};
+
+template<typename T>
+struct unwrap_ref_wrapper<std::reference_wrapper<T>> {
+  using type = T &;
+};
+
+template<typename T>
+using unwrap_ref_wrapper_t = typename unwrap_ref_wrapper<T>::type;
+
 /**
  * Summary:
- *      Determines whether a callable of type `F` that takes argument(s)
- *      of type(s) `Args...` returns bool
+ *      Extracts the ItemType that an iterator of type
+ *      `IteratorType` yields.
  *
- * @tparam F:    The type of the callable
- * @tparam Args: The type(s) of the arguments that the callable accepts
+ * @tparam IteratorType: The type of the iterator
  */
-template<typename F, typename ... Args>
-inline constexpr bool returns_bool_v = returns_type_v<bool, F, Args...>;
+template<typename IteratorType>
+using item_type = typename IteratorType::ItemType;
+
+template<typename IteratorType>
+using unwraped_item_type = unwrap_ref_wrapper_t<typename IteratorType::ItemType>;
 }
 
 // Forward declare Iterator
@@ -179,15 +207,17 @@ struct StepBy : public Iterator<internal::item_type<IteratorType>, StepBy<Iterat
  * ```
  */
 template<typename IteratorType, typename MapF>
-struct Map : public Iterator<std::result_of_t<MapF(internal::item_type<IteratorType>)>, Map<IteratorType, MapF>> {
-  using ItemType = std::result_of_t<MapF(internal::item_type<IteratorType>)>;
+struct Map : public Iterator<std::result_of_t<MapF(internal::unwraped_item_type<IteratorType>)>,
+                             Map<IteratorType, MapF>> {
+
+  using ItemType = std::result_of_t<MapF(internal::unwraped_item_type<IteratorType>)>;
 
   explicit Map(IteratorType it, MapF mapper) : inner{it}, mapper{mapper} {}
 
   std::optional<ItemType> next() {
     auto v = inner.next();
     if (v.has_value()) {
-      return std::make_optional(mapper(v.value()));
+      return std::make_optional(mapper(*v));
     } else {
       return std::nullopt;
     }
@@ -275,7 +305,7 @@ struct Skip : public Iterator<internal::item_type<IteratorType>, Skip<IteratorTy
  */
 template<typename IteratorType, typename Predicate>
 struct SkipWhile : public Iterator<internal::item_type<IteratorType>, SkipWhile<IteratorType, Predicate>> {
-  ASSERT_RETURNS_BOOL(Predicate, internal::item_type<IteratorType>);
+  ASSERT_RETURNS_BOOL(Predicate, internal::unwraped_item_type<IteratorType>);
 
   using ItemType = internal::item_type<IteratorType>;
 
@@ -337,7 +367,7 @@ struct Enumerate : public Iterator<std::pair<size_t, internal::item_type<Iterato
 
     if (v.has_value()) {
       ++index;
-      return std::make_optional(std::make_pair(index - 1, v.value()));
+      return std::make_optional(std::make_pair(index - 1, *v));
     } else {
       return std::nullopt;
     }
@@ -376,7 +406,7 @@ struct Enumerate : public Iterator<std::pair<size_t, internal::item_type<Iterato
  */
 template<typename IteratorType, typename Predicate>
 struct Filter : public Iterator<internal::item_type<IteratorType>, Filter<IteratorType, Predicate>> {
-  ASSERT_RETURNS_BOOL(Predicate, internal::item_type<IteratorType>);
+  ASSERT_RETURNS_BOOL(Predicate, internal::unwraped_item_type<IteratorType>);
 
   using ItemType = internal::item_type<IteratorType>;
 
@@ -589,7 +619,7 @@ struct Take : public Iterator<internal::item_type<IteratorType>, Take<IteratorTy
  */
 template<typename IteratorType, typename Predicate>
 struct TakeWhile : public Iterator<internal::item_type<IteratorType>, TakeWhile<IteratorType, Predicate>> {
-  ASSERT_RETURNS_BOOL(Predicate, internal::item_type<IteratorType>);
+  ASSERT_RETURNS_BOOL(Predicate, internal::unwraped_item_type<IteratorType>);
 
   using ItemType = internal::item_type<IteratorType>;
 
@@ -745,7 +775,7 @@ struct Interleave : public Iterator<internal::item_type<FirstIterator>, Interlea
 template<typename FirstIterator, typename SecondIterator>
 struct InterleaveShortest : public Iterator<internal::item_type<FirstIterator>,
                                             InterleaveShortest<FirstIterator, SecondIterator>> {
-  static_assert(std::is_same_v<internal::item_type<FirstIterator>, internal::item_type<SecondIterator >>,
+  static_assert(std::is_same_v<internal::item_type<FirstIterator>, internal::item_type<SecondIterator>>,
                 "FirstIterator and SecondIterator must yield the same ItemTypes");
 
   using ItemType = internal::item_type<FirstIterator>;
@@ -852,7 +882,7 @@ template<typename IteratorType, typename F>
 struct UniqueBy : public Iterator<internal::strip_ref_wrapper_t<internal::item_type<IteratorType>>,
                                   UniqueBy<IteratorType, F>> {
   using ItemType = internal::strip_ref_wrapper_t<internal::item_type<IteratorType>>;
-  using KeyType = std::result_of_t<F(internal::item_type<IteratorType>)>;
+  using KeyType = std::result_of_t<F(internal::unwraped_item_type<IteratorType>)>;
 
   UniqueBy(IteratorType it, F func) : inner{it}, set{}, func{func} {}
 
@@ -893,7 +923,7 @@ struct UniqueBy : public Iterator<internal::strip_ref_wrapper_t<internal::item_t
  *      struct MyCollection {
  *          // In place of T in specialization below, pass std::reference_wrapper<T>
  *          // to yield by reference
- *          struct MyCollectionIterator : public<T, MyCollectionIterator> {
+ *          struct MyCollectionIterator : public Iterator<T, MyCollectionIterator> {
  *              using ItemType = T; // That's by value yielding. It will cause copy construction/assignment
  *              // using ItemType = std::reference_wrapper<T> if you want to yield by reference
  *
@@ -1102,6 +1132,8 @@ struct Iterator {
     return UniqueBy<IteratorType, F>(*it, func);
   }
 
+  using UnwrapedItemType = internal::unwrap_ref_wrapper_t<ItemType>;
+
   /**
    * Summary:
    *    Consumes the iterator an checks all the items against the
@@ -1128,7 +1160,7 @@ struct Iterator {
    */
   template<typename Predicate>
   bool all(Predicate p) {
-    ASSERT_RETURNS_BOOL(Predicate, typename IteratorType::ItemType);
+    ASSERT_RETURNS_BOOL(Predicate, UnwrapedItemType);
     auto *iter = static_cast<IteratorType *>(this);
     foreach(it, *iter) {
       if (!p(*it)) {
@@ -1164,7 +1196,7 @@ struct Iterator {
    */
   template<typename Predicate>
   bool any(Predicate p) {
-    ASSERT_RETURNS_BOOL(Predicate, typename IteratorType::ItemType);
+    ASSERT_RETURNS_BOOL(Predicate, UnwrapedItemType);
 
     auto *iter = static_cast<IteratorType *>(this);
     foreach(it, *iter) {
@@ -1214,7 +1246,7 @@ struct Iterator {
    */
   template<typename Predicate>
   bool none(Predicate p) {
-    ASSERT_RETURNS_BOOL(Predicate, typename IteratorType::ItemType);
+    ASSERT_RETURNS_BOOL(Predicate, UnwrapedItemType);
 
     auto *iter = static_cast<IteratorType *>(this);
     foreach(it, *iter) {
@@ -1253,7 +1285,7 @@ struct Iterator {
    */
   template<typename Predicate>
   std::optional<ItemType> find(Predicate p) {
-    ASSERT_RETURNS_BOOL(Predicate, ItemType);
+    ASSERT_RETURNS_BOOL(Predicate, UnwrapedItemType);
 
     auto *iter = static_cast<IteratorType *>(this);
     foreach(it, *iter) {
@@ -1293,15 +1325,22 @@ struct Iterator {
    */
   template<typename Compare>
   std::optional<ItemType> max_by(Compare cmp) {
-    static_assert(internal::returns_type_v<ItemType, Compare, ItemType, ItemType>,
-                  "Compare function must accept two ItemTypes and return the maximum one");
-
     auto *iter = static_cast<IteratorType *>(this);
-    auto max = iter->next();
-    foreach(it, *iter) {
-      max = cmp(*it, *max);
+    auto next = iter->next();
+    if (next.has_value()) {
+      UnwrapedItemType max = *next;
+      foreach(it, *iter) {
+        max = cmp(*it, max);
+      }
+
+      if constexpr (internal::is_ref_wrapper_v<ItemType>) {
+        return std::make_optional(std::ref(max));
+      } else {
+        return std::make_optional(max);
+      }
+    } else {
+      return std::nullopt;
     }
-    return max;
   }
 
   /**
@@ -1315,8 +1354,14 @@ struct Iterator {
     auto *iter = static_cast<IteratorType *>(this);
     auto max = iter->next();
     foreach(it, *iter) {
-      if (*it > *max) {
-        max = it;
+      if constexpr (internal::is_ref_wrapper_v<ItemType>) {
+        if ((*it).get() > (*max).get()) {
+          max = it;
+        }
+      } else {
+        if (*it > *max) {
+          max = it;
+        }
       }
     }
     return max;
@@ -1334,14 +1379,21 @@ struct Iterator {
    */
   template<typename Compare>
   std::optional<ItemType> min_by(Compare cmp) {
-    static_assert(internal::returns_type_v<ItemType, Compare, ItemType, ItemType>,
-                  "Compare function must accept two ItemTypes and return the minimum one");
     auto *iter = static_cast<IteratorType *>(this);
-    auto min = iter->next();
-    foreach(it, *iter) {
-      min = cmp(*it, *min);
+    auto next = iter->next();
+    if (next.has_value()) {
+      UnwrapedItemType min = *next;
+      foreach(it, *iter) {
+        min = cmp(*it, min);
+      }
+      if constexpr (internal::is_ref_wrapper_v<ItemType>) {
+        return std::make_optional(std::ref(min));
+      } else {
+        return std::make_optional(min);
+      }
+    } else {
+      return std::nullopt;
     }
-    return min;
   }
 
   /**
@@ -1355,8 +1407,14 @@ struct Iterator {
     auto *iter = static_cast<IteratorType *>(this);
     auto min = iter->next();
     foreach(it, *iter) {
-      if (*it < *min) {
-        min = it;
+      if constexpr (internal::is_ref_wrapper_v<ItemType>) {
+        if ((*it).get() < (*min).get()) {
+          min = it;
+        }
+      } else {
+        if (*it < *min) {
+          min = it;
+        }
       }
     }
     return min;
@@ -1448,13 +1506,15 @@ struct Iterator {
    */
   template<typename F>
   StrippedItemType fold(StrippedItemType init, F func) {
-    static_assert(internal::returns_type_v<StrippedItemType, F, StrippedItemType, ItemType>,
+    static_assert(internal::returns_type_v<StrippedItemType, F, StrippedItemType &, UnwrapedItemType>,
                   "Function must take an ItemType and an accumulator and must return the newly accumulated value");
+
     auto *iter = static_cast<IteratorType *>(this);
+    StrippedItemType res = init;
     foreach(it, *iter) {
-      init = func(init, *it);
+      res = func(res, *it);
     }
-    return init;
+    return res;
   }
 
   /**
