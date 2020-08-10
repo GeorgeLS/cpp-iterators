@@ -6,27 +6,6 @@
 #include <unordered_set>
 
 /**
- *  Summary:
- *      A macro that will iterate over the collection or the
- *      iterator provided (each iterator has an iter method in it).
- *
- *  Arguments:
- *      it: The name of the variable that will be created which will contain
- *          the values that the iterator yields. This values will be of type
- *          std::optional<T> but they are guaranteed to contain a value so you
- *          can get the value by using the `.value()` proc or the dereference
- *          operator (*)
- *
- *      iterable:
- *          Everything that has an `iter()` method which will produce an iterator.
- *          Every iterator in this module provided an iter method by default
- */
-#define foreach(it, iterable)                        \
-    auto __##it##__it = (iterable).iter();           \
-    auto it = __##it##__it.next();                   \
-    for (; it.has_value(); it = __##it##__it.next()) \
-
-/**
  * Summary:
  *      Internal namespace providing helper traits for the iterators design
  */
@@ -1162,8 +1141,8 @@ struct Iterator {
   bool all(Predicate p) {
     ASSERT_RETURNS_BOOL(Predicate, UnwrapedItemType);
     auto *iter = static_cast<IteratorType *>(this);
-    foreach(it, *iter) {
-      if (!p(*it)) {
+    for (UnwrapedItemType v : *iter) {
+      if (!p(v)) {
         return false;
       }
     }
@@ -1199,8 +1178,8 @@ struct Iterator {
     ASSERT_RETURNS_BOOL(Predicate, UnwrapedItemType);
 
     auto *iter = static_cast<IteratorType *>(this);
-    foreach(it, *iter) {
-      if (p(*it)) {
+    for (UnwrapedItemType v : *iter) {
+      if (p(v)) {
         return true;
       }
     }
@@ -1249,8 +1228,8 @@ struct Iterator {
     ASSERT_RETURNS_BOOL(Predicate, UnwrapedItemType);
 
     auto *iter = static_cast<IteratorType *>(this);
-    foreach(it, *iter) {
-      if (p(*it)) {
+    for (UnwrapedItemType v : *iter) {
+      if (p(v)) {
         return false;
       }
     }
@@ -1288,9 +1267,9 @@ struct Iterator {
     ASSERT_RETURNS_BOOL(Predicate, UnwrapedItemType);
 
     auto *iter = static_cast<IteratorType *>(this);
-    foreach(it, *iter) {
-      if (p(*it)) {
-        return it;
+    for (UnwrapedItemType v : *iter) {
+      if (p(v)) {
+        return v;
       }
     }
 
@@ -1329,8 +1308,8 @@ struct Iterator {
     auto next = iter->next();
     if (next.has_value()) {
       UnwrapedItemType max = *next;
-      foreach(it, *iter) {
-        max = cmp(*it, max);
+      for (UnwrapedItemType v : *iter) {
+        max = cmp(v, max);
       }
 
       if constexpr (internal::is_ref_wrapper_v<ItemType>) {
@@ -1353,14 +1332,14 @@ struct Iterator {
   std::optional<ItemType> max() {
     auto *iter = static_cast<IteratorType *>(this);
     auto max = iter->next();
-    foreach(it, *iter) {
+    for (UnwrapedItemType v : *iter) {
       if constexpr (internal::is_ref_wrapper_v<ItemType>) {
-        if ((*it).get() > (*max).get()) {
-          max = it;
+        if (v > (*max).get()) {
+          max = v;
         }
       } else {
-        if (*it > *max) {
-          max = it;
+        if (v > *max) {
+          max = v;
         }
       }
     }
@@ -1383,8 +1362,8 @@ struct Iterator {
     auto next = iter->next();
     if (next.has_value()) {
       UnwrapedItemType min = *next;
-      foreach(it, *iter) {
-        min = cmp(*it, min);
+      for (UnwrapedItemType v : *iter) {
+        min = cmp(v, min);
       }
       if constexpr (internal::is_ref_wrapper_v<ItemType>) {
         return std::make_optional(std::ref(min));
@@ -1406,14 +1385,14 @@ struct Iterator {
   std::optional<ItemType> min() {
     auto *iter = static_cast<IteratorType *>(this);
     auto min = iter->next();
-    foreach(it, *iter) {
+    for (UnwrapedItemType v : *iter) {
       if constexpr (internal::is_ref_wrapper_v<ItemType>) {
-        if ((*it).get() < (*min).get()) {
-          min = it;
+        if (v < (*min).get()) {
+          min = v;
         }
       } else {
-        if (*it < *min) {
-          min = it;
+        if (v < *min) {
+          min = v;
         }
       }
     }
@@ -1441,8 +1420,8 @@ struct Iterator {
   template<typename F>
   void for_each(F func) {
     auto iter = *static_cast<IteratorType *>(this);
-    foreach(it, iter) {
-      func(*it);
+    for (UnwrapedItemType v : iter) {
+      func(v);
     }
   }
 
@@ -1471,8 +1450,8 @@ struct Iterator {
   StrippedItemType sum() {
     auto *iter = static_cast<IteratorType *>(this);
     StrippedItemType res{};
-    foreach(it, *iter) {
-      res = res + *it;
+    for (UnwrapedItemType v : *iter) {
+      res = res + v;
     }
     return res;
   }
@@ -1511,8 +1490,8 @@ struct Iterator {
 
     auto *iter = static_cast<IteratorType *>(this);
     StrippedItemType res = init;
-    foreach(it, *iter) {
-      res = func(res, *it);
+    for (UnwrapedItemType v : *iter) {
+      res = func(res, v);
     }
     return res;
   }
@@ -1544,8 +1523,8 @@ struct Iterator {
   std::string join(const std::string_view &sep) {
     std::string res{};
     auto *iter = static_cast<IteratorType *>(this);
-    foreach(it, *iter) {
-      res += std::to_string(*it) + sep.data();
+    for (UnwrapedItemType v : *iter) {
+      res += std::to_string(v) + sep.data();
     }
     res = std::move(res.substr(0, res.length() - sep.length()));
     return res;
@@ -1561,7 +1540,7 @@ struct Iterator {
   size_t count() {
     auto *iter = static_cast<IteratorType *>(this);
     size_t count = 0U;
-    foreach(_, *iter) {
+    for (UnwrapedItemType _ : *iter) {
       ++count;
     }
     return count;
@@ -1633,6 +1612,76 @@ struct Iterator {
   IteratorType iter() const {
     return *static_cast<const IteratorType *>(this);
   }
+
+  /**
+   * Summary:
+   *    This function is just for `range for` syntax
+   *    interoperability. You shouldn't use this function
+   *    directly
+   *
+   * @return: Return the iterator itself and advance it as well.
+   */
+  IteratorType begin() {
+    auto *it = static_cast<IteratorType *>(this);
+    yielded = it->next();
+    return *it;
+  }
+
+  /**
+   * Summary:
+   *    This function is just for `range for` syntax
+   *    interoperability. Actually, is just for terminating
+   *    the loop. You shouldn't use this function directly.
+   *
+   * @return: The iterator itself with empty state
+   */
+  IteratorType end() {
+    auto *it = static_cast<const IteratorType *>(this);
+    yielded = std::nullopt;
+    return *it;
+  }
+
+  /**
+   * Summary:
+   *    This function is just for `range for` syntax
+   *    interoperability. It  advances the iterator and stores
+   *    the result. You shouldn't use this function directly
+   *
+   * @return: The iterator itself while advancing it first
+   */
+  IteratorType &operator++() {
+    auto *it = static_cast<IteratorType *>(this);
+    this->yielded = it->next();
+    return *it;
+  }
+
+  /**
+   * Summary:
+   *    This function is just for `range for` syntax
+   *    interoperability. It retrieves the current yielded item.
+   *    You shouldn't use this function directly.
+   *
+   * @return: The item that was yielded last
+   */
+  UnwrapedItemType operator*() {
+    return *this->yielded;
+  }
+
+  /**
+   * Summary:
+   *    This function is just for `range for` syntax
+   *    interoperability. It compares the current state of the
+   *    iterator with the empty state. You shouldn't use this
+   *    function directly.
+   *
+   * @param _rhs: The iterator we comparing against. Unused
+   * @return:     true if the iterator has finished, false otherwise
+   */
+  bool operator!=(const IteratorType &_rhs) {
+    return this->yielded != std::nullopt;
+  }
+
+  std::optional<ItemType> yielded{};
 };
 
 #endif //ITERATOR__ITERATOR_H

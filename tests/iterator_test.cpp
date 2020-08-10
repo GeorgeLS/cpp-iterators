@@ -107,8 +107,7 @@ UNIT_TEST(enumerate_works) {
   strings[3] = "String_3";
 
   size_t i = 0U;
-  foreach(it, strings.iter().enumerate()) {
-    auto[index, str] = *it;
+  for (auto[index, str] : strings.iter().enumerate()) {
     std::string expected_str = "String_" + std::to_string(i);
     ASSERT(index == i);
     ASSERT(expected_str == str.get());

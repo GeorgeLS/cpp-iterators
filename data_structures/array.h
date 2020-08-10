@@ -49,8 +49,7 @@ template<typename T> struct Array {
   static Array<T> from_iterator(IteratorType &iter) {
     size_t count = iter.clone().count();
     auto arr = Array<T>(count);
-    foreach(it, iter.enumerate()) {
-      auto[index, value] = *it;
+    for (auto[index, value] : iter.enumerate()) {
       arr[index] = std::move(value);
     }
     return arr;
